@@ -18,7 +18,6 @@ app.get('/search', async (req, res) => {
             safeSearch: 0
         });
 
-        // Retorna a lista de resultados formatada em JSON
         res.json(searchResults.results);
     } catch (error) {
         res.status(500).json({ error: 'Erro ao realizar a busca' });
