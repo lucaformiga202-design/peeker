@@ -5,7 +5,7 @@ const app = express();
 app.use(cors());
 
 app.get('/', (req, res) => {
-    res.send('API Peeker Ativa!');
+    res.send('API Peeker SearXNG Ativa!');
 });
 
 app.get('/search', async (req, res) => {
@@ -13,37 +13,31 @@ app.get('/search', async (req, res) => {
     if (!query) return res.status(400).json({ error: 'Termo ausente' });
 
     try {
-        // Busca via API de Tópicos do DuckDuckGo
-        const response = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`);
+        // Usa uma instância pública estável do SearXNG
+        const searchUrl = `https://searx.be/search?q=${encodeURIComponent(query)}&format=json`;
+        
+        const response = await fetch(searchUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+        });
+
+        if (!response.ok) {
+            return res.status(response.status).json({ error: 'Erro ao consultar o motor de busca' });
+        }
+
         const data = await response.json();
-
-        const results = [];
-
-        // Adiciona a resposta principal se existir
-        if (data.AbstractText && data.AbstractURL) {
-            results.push({
-                title: data.Heading || query,
-                url: data.AbstractURL,
-                description: data.AbstractText
-            });
-        }
-
-        // Adiciona os tópicos relacionados
-        if (data.RelatedTopics && data.RelatedTopics.length > 0) {
-            data.RelatedTopics.forEach(item => {
-                if (item.FirstURL && item.Text) {
-                    results.push({
-                        title: item.Text.split(' - ')[0] || item.Text,
-                        url: item.FirstURL,
-                        description: item.Text
-                    });
-                }
-            });
-        }
+        
+        // Formata os resultados da web obtidos de múltiplos motores (Google, Bing, DuckDuckGo, etc.)
+        const results = (data.results || []).map(item => ({
+            title: item.title,
+            url: item.url,
+            description: item.content || 'Sem descrição disponível.'
+        }));
 
         res.json(results);
     } catch (error) {
-        res.status(500).json({ error: 'Erro interno na busca' });
+        res.status(500).json({ error: 'Erro interno no servidor' });
     }
 });
 
