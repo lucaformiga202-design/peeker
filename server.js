@@ -5,7 +5,7 @@ const app = express();
 app.use(cors());
 
 // Crie uma conta gratuita em https://tavily.com e cole sua API Key abaixo
-const TAVILY_API_KEY = "SUA_CHAVE_TAVILY_AQUI";
+const TAVILY_API_KEY = "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";
 
 app.get('/', (req, res) => {
     res.send('API Peeker Web Global Ativa!');
