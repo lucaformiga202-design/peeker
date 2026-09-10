@@ -4,47 +4,62 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
-// Insira sua chave gratuita da Tavily (obtenha em https://tavily.com)
-const TAVILY_API_KEY = "SUA_CHAVE_TAVILY_AQUI";
+// Nós públicos do SearXNG que agregam resultados globais (Google, Bing, DuckDuckGo, Brave, etc)
+const SEARX_NODES = [
+    'https://searx.prvcy.eu',
+    'https://searxng.site',
+    'https://searx.space',
+    'https://searx.be'
+];
 
 app.get('/', (req, res) => {
-    res.send('API Peeker Web Global Ativa!');
+    res.send('API Peeker Meta-Search Ativa!');
 });
 
 app.get('/search', async (req, res) => {
     const query = req.query.q;
     if (!query) return res.status(400).json({ error: 'Termo ausente' });
 
-    try {
-        const response = await fetch('https://api.tavily.com/search', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                api_key: TAVILY_API_KEY,
-                query: query,
-                search_depth: "basic",
-                include_answer: false,
-                max_results: 10
-            })
-        });
+    let results = [];
+    let success = false;
 
-        if (!response.ok) {
-            return res.status(response.status).json({ error: 'Erro no provedor de busca' });
+    // Tenta cada nó da rede até obter resposta completa
+    for (const node of SEARX_NODES) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3500); // Timeout de 3.5s por nó
+
+            const response = await fetch(`${node}/search?q=${encodeURIComponent(query)}&format=json`, {
+                signal: controller.signal,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            });
+
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.results && data.results.length > 0) {
+                    results = data.results.slice(0, 12).map(item => ({
+                        title: item.title,
+                        url: item.url,
+                        description: item.content || 'Sem descrição disponível.'
+                    }));
+                    success = true;
+                    break;
+                }
+            }
+        } catch (e) {
+            // Se o nó falhar ou der timeout, passa para o próximo
+            continue;
         }
+    }
 
-        const data = await response.json();
-
-        const results = (data.results || []).map(item => ({
-            title: item.title,
-            url: item.url,
-            description: item.content || 'Sem descrição disponível.'
-        }));
-
+    if (success) {
         res.json(results);
-    } catch (error) {
-        res.status(500).json({ error: 'Erro interno do servidor' });
+    } else {
+        res.status(502).json({ error: 'Nenhum nó de busca respondeu no momento.' });
     }
 });
 
