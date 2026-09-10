@@ -13,49 +13,38 @@ app.get('/search', async (req, res) => {
     if (!query) return res.status(400).json({ error: 'Termo ausente' });
 
     try {
-        // Faz a busca no HTML leve do DuckDuckGo
-        const response = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+        // Usa o endpoint público de busca em formato JSON da web aberta
+        const response = await fetch(`https://api.mojeek.com/search?q=${encodeURIComponent(query)}&fmt=json`, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
         });
 
         if (!response.ok) {
-            return res.status(502).json({ error: 'Erro ao conectar ao motor de busca' });
+            // Backup usando o endpoint da API publica do DuckDuckGo Instant Answer
+            const fallbackResponse = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json`);
+            const fallbackData = await fallbackResponse.json();
+            
+            const results = (fallbackData.RelatedTopics || []).slice(0, 10).map(item => ({
+                title: item.Text ? item.Text.split(' - ')[0] : query,
+                url: item.FirstURL || '',
+                description: item.Text || 'Sem descrição.'
+            })).filter(item => item.url);
+
+            return res.json(results);
         }
 
-        const html = await response.text();
-        const results = [];
+        const data = await response.json();
 
-        // Expressão regular para extrair links, títulos e trechos (snippets)
-        const regex = /<a class="result__url" href="([^"]+)".*?>[\s\S]*?<\/a>[\s\S]*?<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
-        let match;
-
-        while ((match = regex.exec(html)) !== null && results.length < 12) {
-            const rawUrl = match[1].trim();
-            const rawSnippet = match[2].replace(/<[^>]+>/g, '').trim();
-
-            // Decodifica a URL redirecionada do DuckDuckGo se necessário
-            let cleanUrl = rawUrl;
-            if (rawUrl.includes('uddg=')) {
-                cleanUrl = decodeURIComponent(rawUrl.split('uddg=')[1].split('&')[0]);
-            }
-
-            // Garante que o link seja absoluto
-            if (cleanUrl.startsWith('//')) {
-                cleanUrl = 'https:' + cleanUrl;
-            }
-
-            results.push({
-                title: query,
-                url: cleanUrl,
-                description: rawSnippet || 'Sem descrição disponível.'
-            });
-        }
+        const results = (data.response?.results || []).map(item => ({
+            title: item.title,
+            url: item.url,
+            description: item.snippet || 'Sem descrição disponível.'
+        }));
 
         res.json(results);
     } catch (error) {
-        res.status(500).json({ error: 'Erro interno no servidor de busca' });
+        res.status(500).json({ error: 'Erro ao processar busca na web.' });
     }
 });
 
