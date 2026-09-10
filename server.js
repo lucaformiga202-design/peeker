@@ -4,7 +4,7 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
-// Crie uma conta gratuita em https://tavily.com e cole sua API Key abaixo
+// Insira sua chave do Tavily aqui
 const TAVILY_API_KEY = "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";
 
 app.get('/', (req, res) => {
@@ -24,14 +24,14 @@ app.get('/search', async (req, res) => {
             body: JSON.stringify({
                 api_key: TAVILY_API_KEY,
                 query: query,
-                search_depth: "basic",
+                search_depth: "advanced", // Mapeia a web com mais precisão para achar sites oficiais
                 include_answer: false,
                 max_results: 10
             })
         });
 
         if (!response.ok) {
-            return res.status(response.status).json({ error: 'Erro ao consultar a API de busca' });
+            return res.status(response.status).json({ error: 'Erro no provedor de busca' });
         }
 
         const data = await response.json();
@@ -44,7 +44,7 @@ app.get('/search', async (req, res) => {
 
         res.json(results);
     } catch (error) {
-        res.status(500).json({ error: 'Erro interno no servidor' });
+        res.status(500).json({ error: 'Erro interno do servidor' });
     }
 });
 
