@@ -4,14 +4,6 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
-// Lista de instâncias públicas do SearXNG para alternância automática
-const SEARX_INSTANCES = [
-    'https://searx.be',
-    'https://searx.prvcy.eu',
-    'https://searxng.site',
-    'https://searx.space'
-];
-
 app.get('/', (req, res) => {
     res.send('API Peeker Ativa!');
 });
@@ -20,46 +12,39 @@ app.get('/search', async (req, res) => {
     const query = req.query.q;
     if (!query) return res.status(400).json({ error: 'Termo ausente' });
 
-    let results = [];
-    let success = false;
-
-    // Tenta cada instância até uma responder com sucesso
-    for (const instance of SEARX_INSTANCES) {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout
-
-            const response = await fetch(`${instance}/search?q=${encodeURIComponent(query)}&format=json`, {
-                signal: controller.signal,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-            });
-
-            clearTimeout(timeoutId);
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.results && data.results.length > 0) {
-                    results = data.results.map(item => ({
-                        title: item.title,
-                        url: item.url,
-                        description: item.content || 'Sem descrição disponível.'
-                    }));
-                    success = true;
-                    break;
-                }
+    try {
+        // Requisição para a instância JSON pública do SearXNG
+        const response = await fetch(`https://searx.be/search?q=${encodeURIComponent(query)}&format=json`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
-        } catch (e) {
-            // Se falhar, tenta a próxima instância do loop
-            continue;
-        }
-    }
+        });
 
-    if (success) {
+        if (!response.ok) {
+            // Se a instância padrão falhar, tenta uma instância alternativa
+            const altResponse = await fetch(`https://searx.space/search?q=${encodeURIComponent(query)}&format=json`);
+            const altData = await altResponse.json();
+            
+            const altResults = (altData.results || []).slice(0, 10).map(item => ({
+                title: item.title,
+                url: item.url,
+                description: item.content || 'Sem descrição.'
+            }));
+
+            return res.json(altResults);
+        }
+
+        const data = await response.json();
+        
+        const results = (data.results || []).slice(0, 10).map(item => ({
+            title: item.title,
+            url: item.url,
+            description: item.content || 'Sem descrição.'
+        }));
+
         res.json(results);
-    } else {
-        res.status(502).json({ error: 'Nenhum motor de busca respondeu no momento.' });
+    } catch (error) {
+        res.status(500).json({ error: 'Falha ao processar requisição no servidor.' });
     }
 });
 
