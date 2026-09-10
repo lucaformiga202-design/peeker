@@ -13,38 +13,41 @@ app.get('/search', async (req, res) => {
     if (!query) return res.status(400).json({ error: 'Termo ausente' });
 
     try {
-        // Requisição para a instância JSON pública do SearXNG
-        const response = await fetch(`https://searx.be/search?q=${encodeURIComponent(query)}&format=json`, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-        });
-
+        // Consulta a API de tópicos e resultados abertos sem exigência de scraping/chaves
+        const response = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`);
+        
         if (!response.ok) {
-            // Se a instância padrão falhar, tenta uma instância alternativa
-            const altResponse = await fetch(`https://searx.space/search?q=${encodeURIComponent(query)}&format=json`);
-            const altData = await altResponse.json();
-            
-            const altResults = (altData.results || []).slice(0, 10).map(item => ({
-                title: item.title,
-                url: item.url,
-                description: item.content || 'Sem descrição.'
-            }));
-
-            return res.json(altResults);
+            return res.status(response.status).json({ error: 'Erro no provedor de busca' });
         }
 
         const data = await response.json();
-        
-        const results = (data.results || []).slice(0, 10).map(item => ({
-            title: item.title,
-            url: item.url,
-            description: item.content || 'Sem descrição.'
-        }));
+        const results = [];
+
+        // Adiciona resultado direto se disponível
+        if (data.AbstractText && data.AbstractURL) {
+            results.push({
+                title: data.Heading || query,
+                url: data.AbstractURL,
+                description: data.AbstractText
+            });
+        }
+
+        // Adiciona tópicos e páginas relacionadas
+        if (data.RelatedTopics && data.RelatedTopics.length > 0) {
+            data.RelatedTopics.forEach(item => {
+                if (item.FirstURL && item.Text) {
+                    results.push({
+                        title: item.Text.split(' - ')[0] || item.Text,
+                        url: item.FirstURL,
+                        description: item.Text
+                    });
+                }
+            });
+        }
 
         res.json(results);
     } catch (error) {
-        res.status(500).json({ error: 'Falha ao processar requisição no servidor.' });
+        res.status(500).json({ error: 'Falha interna ao processar pesquisa' });
     }
 });
 
