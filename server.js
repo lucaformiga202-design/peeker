@@ -4,6 +4,14 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
+// Lista de instâncias públicas do SearXNG para alternância automática
+const SEARX_INSTANCES = [
+    'https://searx.be',
+    'https://searx.prvcy.eu',
+    'https://searxng.site',
+    'https://searx.space'
+];
+
 app.get('/', (req, res) => {
     res.send('API Peeker Ativa!');
 });
@@ -12,30 +20,46 @@ app.get('/search', async (req, res) => {
     const query = req.query.q;
     if (!query) return res.status(400).json({ error: 'Termo ausente' });
 
-    try {
-        const searchUrl = `https://searx.be/search?q=${encodeURIComponent(query)}&format=json`;
-        
-        const response = await fetch(searchUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    let results = [];
+    let success = false;
+
+    // Tenta cada instância até uma responder com sucesso
+    for (const instance of SEARX_INSTANCES) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout
+
+            const response = await fetch(`${instance}/search?q=${encodeURIComponent(query)}&format=json`, {
+                signal: controller.signal,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            });
+
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.results && data.results.length > 0) {
+                    results = data.results.map(item => ({
+                        title: item.title,
+                        url: item.url,
+                        description: item.content || 'Sem descrição disponível.'
+                    }));
+                    success = true;
+                    break;
+                }
             }
-        });
-
-        if (!response.ok) {
-            return res.status(response.status).json({ error: 'Erro no motor de busca' });
+        } catch (e) {
+            // Se falhar, tenta a próxima instância do loop
+            continue;
         }
+    }
 
-        const data = await response.json();
-        
-        const results = (data.results || []).map(item => ({
-            title: item.title,
-            url: item.url,
-            description: item.content || 'Sem descrição disponível.'
-        }));
-
+    if (success) {
         res.json(results);
-    } catch (error) {
-        res.status(500).json({ error: 'Erro interno do servidor' });
+    } else {
+        res.status(502).json({ error: 'Nenhum motor de busca respondeu no momento.' });
     }
 });
 
