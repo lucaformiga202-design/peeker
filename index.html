@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peeker</title>
+    <style>
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
+        }
+
+        body { 
+            background-color: #0f172a; 
+            color: #f8fafc; 
+            min-height: 100vh; 
+        }
+
+        .hidden { 
+            display: none !important; 
+        }
+
+        /* Tela Inicial */
+        #homePage { 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            padding: 1rem;
+        }
+
+        .logo-large { 
+            font-size: 4rem; 
+            font-weight: 800; 
+            background: linear-gradient(135deg, #38bdf8, #818cf8); 
+            -webkit-background-clip: text; 
+            -webkit-text-fill-color: transparent; 
+            margin-bottom: 2rem; 
+        }
+
+        /* Cabeçalho de Resultados */
+        #resultsPage { 
+            padding: 2rem; 
+        }
+
+        .header { 
+            display: flex; 
+            align-items: center; 
+            gap: 2rem; 
+            margin-bottom: 2rem; 
+            border-bottom: 1px solid #334155; 
+            padding-bottom: 1.5rem; 
+        }
+
+        .logo-small { 
+            font-size: 2rem; 
+            font-weight: 800; 
+            cursor: pointer; 
+            background: linear-gradient(135deg, #38bdf8, #818cf8); 
+            -webkit-background-clip: text; 
+            -webkit-text-fill-color: transparent; 
+        }
+
+        /* Campo de Busca */
+        .search-box { 
+            display: flex; 
+            align-items: center; 
+            background-color: #1e293b; 
+            border: 2px solid #334155; 
+            border-radius: 9999px; 
+            padding: 0.5rem 1.25rem; 
+            width: 100%; 
+            transition: border-color 0.2s;
+        }
+
+        .search-box:focus-within {
+            border-color: #38bdf8;
+        }
+
+        .header .search-box { 
+            max-width: 500px; 
+            padding: 0.3rem 1rem; 
+        }
+
+        .search-input { 
+            width: 100%; 
+            background: transparent; 
+            border: none; 
+            outline: none; 
+            color: #f8fafc; 
+            font-size: 1.1rem; 
+            padding: 0.5rem; 
+        }
+
+        .search-button { 
+            background-color: #38bdf8; 
+            color: #0f172a; 
+            border: none; 
+            border-radius: 9999px; 
+            padding: 0.6rem 1.2rem; 
+            font-weight: 600; 
+            cursor: pointer; 
+            transition: opacity 0.2s;
+        }
+
+        .search-button:hover {
+            opacity: 0.9;
+        }
+
+        /* Lista de Resultados */
+        .results-container { 
+            max-width: 700px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 1.5rem; 
+        }
+
+        .result-card { 
+            background-color: #1e293b; 
+            padding: 1rem 1.25rem; 
+            border-radius: 8px; 
+            border: 1px solid #334155; 
+        }
+
+        .result-url { 
+            font-size: 0.85rem; 
+            color: #38bdf8; 
+            margin-bottom: 0.2rem; 
+            word-break: break-all; 
+        }
+
+        .result-title { 
+            color: #818cf8; 
+            text-decoration: none; 
+            font-size: 1.2rem; 
+            font-weight: 600; 
+        }
+
+        .result-title:hover { 
+            text-decoration: underline; 
+        }
+
+        .result-snippet { 
+            color: #94a3b8; 
+            margin-top: 0.4rem; 
+            font-size: 0.95rem; 
+            line-height: 1.4; 
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TELA INICIAL -->
+    <section id="homePage">
+        <div style="text-align: center; width: 90%; max-width: 600px;">
+            <h1 class="logo-large">peeker</h1>
+            <form onsubmit="handleSearch(event, 'homeInput')" class="search-box">
+                <input type="text" id="homeInput" class="search-input" placeholder="Pesquisar na web..." required autofocus>
+                <button type="submit" class="search-button">Buscar</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- TELA DE RESULTADOS -->
+    <section id="resultsPage" class="hidden">
+        <header class="header">
+            <span class="logo-small" onclick="goHome()">peeker</span>
+            <form onsubmit="handleSearch(event, 'resultsInput')" class="search-box">
+                <input type="text" id="resultsInput" class="search-input" required>
+            </form>
+        </header>
+        <main class="results-container" id="resultsList"></main>
+    </section>
+
+    <script>
+        const BACKEND_URL = "https://peeker-e87a.onrender.com";
+
+        const homePage = document.getElementById('homePage');
+        const resultsPage = document.getElementById('resultsPage');
+        const homeInput = document.getElementById('homeInput');
+        const resultsInput = document.getElementById('resultsInput');
+        const resultsList = document.getElementById('resultsList');
+
+        function handleSearch(event, inputId) {
+            event.preventDefault();
+            const query = document.getElementById(inputId).value.trim();
+            if (!query) return;
+
+            homeInput.value = query;
+            resultsInput.value = query;
+
+            homePage.classList.add('hidden');
+            resultsPage.classList.remove('hidden');
+
+            fetchServerResults(query);
+        }
+
+        async function fetchServerResults(query) {
+            resultsList.innerHTML = `<p style="color: #94a3b8;">Buscando na web por "<strong>${query}</strong>"...</p>`;
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/search?q=${encodeURIComponent(query)}`);
+                
+                if (!response.ok) {
+                    throw new Error('Servidor indisponível');
+                }
+
+                const results = await response.json();
+
+                resultsList.innerHTML = '';
+
+                if (results && results.length > 0) {
+                    results.forEach(item => {
+                        appendResultCard(
+                            item.title,
+                            item.url,
+                            item.description
+                        );
+                    });
+                } else {
+                    resultsList.innerHTML = `<p style="color: #94a3b8;">Nenhum resultado encontrado para "<strong>${query}</strong>".</p>`;
+                }
+            } catch (error) {
+                resultsList.innerHTML = `
+                    <div class="result-card">
+                        <p style="color: #f87171; font-weight: bold;">Erro de Comunicação</p>
+                        <p class="result-snippet">Não foi possível obter resposta. Aguarde 1 minuto até o Render concluir o deploy da atualização.</p>
+                    </div>
+                `;
+            }
+        }
+
+        function appendResultCard(title, url, snippet) {
+            const card = document.createElement('article');
+            card.className = 'result-card';
+            card.innerHTML = `
+                <div class="result-url">${url}</div>
+                <a href="${url}" class="result-title" target="_blank" rel="noopener noreferrer">${title}</a>
+                <p class="result-snippet">${snippet}</p>
+            `;
+            resultsList.appendChild(card);
+        }
+
+        function goHome() {
+            resultsPage.classList.add('hidden');
+            homePage.classList.remove('hidden');
+            homeInput.value = '';
+            resultsInput.value = '';
+            homeInput.focus();
+        }
+    </script>
+</body>
+</html>
