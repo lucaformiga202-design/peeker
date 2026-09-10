@@ -4,7 +4,6 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
-// Insira sua chave do Tavily aqui
 const TAVILY_API_KEY = "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";
 
 app.get('/', (req, res) => {
@@ -18,29 +17,41 @@ app.get('/search', async (req, res) => {
     try {
         const response = await fetch('https://api.tavily.com/search', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 api_key: TAVILY_API_KEY,
                 query: query,
-                search_depth: "advanced", // Mapeia a web com mais precisão para achar sites oficiais
+                search_depth: "advanced",
                 include_answer: false,
                 max_results: 10
             })
         });
 
-        if (!response.ok) {
-            return res.status(response.status).json({ error: 'Erro no provedor de busca' });
-        }
+        if (!response.ok) return res.status(response.status).json({ error: 'Erro de busca' });
 
         const data = await response.json();
 
-        const results = (data.results || []).map(item => ({
-            title: item.title,
-            url: item.url,
-            description: item.content || 'Sem descrição disponível.'
-        }));
+        // Ordena para garantir que a home oficial (.com, .org) fique em 1º lugar
+        let rawResults = data.results || [];
+        rawResults.sort((a, b) => {
+            const isHomeA = new URL(a.url).pathname === '/' || new URL(a.url).pathname === '';
+            const isHomeB = new URL(b.url).pathname === '/' || new URL(b.url).pathname === '';
+            return isHomeB - isHomeA;
+        });
+
+        // Formata e limita o texto da descrição (máximo 120 caracteres)
+        const results = rawResults.map(item => {
+            let shortSnippet = item.content || 'Sem descrição disponível.';
+            if (shortSnippet.length > 120) {
+                shortSnippet = shortSnippet.substring(0, 120) + '...';
+            }
+
+            return {
+                title: item.title,
+                url: item.url,
+                description: shortSnippet
+            };
+        });
 
         res.json(results);
     } catch (error) {
