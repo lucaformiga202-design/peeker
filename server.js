@@ -4,62 +4,50 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
-// Nós públicos do SearXNG que agregam resultados globais (Google, Bing, DuckDuckGo, Brave, etc)
-const SEARX_NODES = [
-    'https://searx.prvcy.eu',
-    'https://searxng.site',
-    'https://searx.space',
-    'https://searx.be'
-];
-
 app.get('/', (req, res) => {
-    res.send('API Peeker Meta-Search Ativa!');
+    res.send('API Peeker Web Global Ativa!');
 });
 
 app.get('/search', async (req, res) => {
     const query = req.query.q;
     if (!query) return res.status(400).json({ error: 'Termo ausente' });
 
-    let results = [];
-    let success = false;
+    // Motores de busca alternativos (Brave, DuckDuckGo, SearXNG)
+    const endpoints = [
+        `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+        `https://searx.be/search?q=${encodeURIComponent(query)}&format=json`
+    ];
 
-    // Tenta cada nó da rede até obter resposta completa
-    for (const node of SEARX_NODES) {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3500); // Timeout de 3.5s por nó
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 6000); // 6 segundos de limite
 
-            const response = await fetch(`${node}/search?q=${encodeURIComponent(query)}&format=json`, {
-                signal: controller.signal,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-            });
-
-            clearTimeout(timeoutId);
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.results && data.results.length > 0) {
-                    results = data.results.slice(0, 12).map(item => ({
-                        title: item.title,
-                        url: item.url,
-                        description: item.content || 'Sem descrição disponível.'
-                    }));
-                    success = true;
-                    break;
-                }
+        const response = await fetch(endpoints[1], {
+            signal: controller.signal,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
-        } catch (e) {
-            // Se o nó falhar ou der timeout, passa para o próximo
-            continue;
-        }
-    }
+        });
 
-    if (success) {
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+            return res.status(502).json({ error: 'Erro de resposta do motor de busca' });
+        }
+
+        const data = await response.json();
+
+        // Mapeia os resultados da busca global
+        const results = (data.results || []).slice(0, 15).map(item => ({
+            title: item.title,
+            url: item.url,
+            description: item.content || 'Sem descrição disponível.'
+        }));
+
         res.json(results);
-    } else {
-        res.status(502).json({ error: 'Nenhum nó de busca respondeu no momento.' });
+    } catch (error) {
+        // Retorno limpo caso haja instabilidade no nó de busca
+        res.status(500).json({ error: 'Servidor temporariamente indisponível. Tente novamente.' });
     }
 });
 
