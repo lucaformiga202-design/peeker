@@ -4,6 +4,9 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
+// Crie uma conta gratuita em https://tavily.com e cole sua API Key abaixo
+const TAVILY_API_KEY = "SUA_CHAVE_TAVILY_AQUI";
+
 app.get('/', (req, res) => {
     res.send('API Peeker Web Global Ativa!');
 });
@@ -13,38 +16,35 @@ app.get('/search', async (req, res) => {
     if (!query) return res.status(400).json({ error: 'Termo ausente' });
 
     try {
-        // Usa o endpoint público de busca em formato JSON da web aberta
-        const response = await fetch(`https://api.mojeek.com/search?q=${encodeURIComponent(query)}&fmt=json`, {
+        const response = await fetch('https://api.tavily.com/search', {
+            method: 'POST',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                api_key: TAVILY_API_KEY,
+                query: query,
+                search_depth: "basic",
+                include_answer: false,
+                max_results: 10
+            })
         });
 
         if (!response.ok) {
-            // Backup usando o endpoint da API publica do DuckDuckGo Instant Answer
-            const fallbackResponse = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json`);
-            const fallbackData = await fallbackResponse.json();
-            
-            const results = (fallbackData.RelatedTopics || []).slice(0, 10).map(item => ({
-                title: item.Text ? item.Text.split(' - ')[0] : query,
-                url: item.FirstURL || '',
-                description: item.Text || 'Sem descrição.'
-            })).filter(item => item.url);
-
-            return res.json(results);
+            return res.status(response.status).json({ error: 'Erro ao consultar a API de busca' });
         }
 
         const data = await response.json();
 
-        const results = (data.response?.results || []).map(item => ({
+        const results = (data.results || []).map(item => ({
             title: item.title,
             url: item.url,
-            description: item.snippet || 'Sem descrição disponível.'
+            description: item.content || 'Sem descrição disponível.'
         }));
 
         res.json(results);
     } catch (error) {
-        res.status(500).json({ error: 'Erro ao processar busca na web.' });
+        res.status(500).json({ error: 'Erro interno no servidor' });
     }
 });
 
